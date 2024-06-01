@@ -23,6 +23,7 @@ from google.oauth2 import id_token
 from pip._vendor import cachecontrol
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.security import generate_password_hash, check_password_hash
+import hmac
 
 from flask_se_config import secure_filename
 from se_models import db, Users
@@ -90,11 +91,18 @@ def login_index():
         password = request.form.get("password")
         user = Users.query.filter_by(email=email).first()
         if user:
-            if (user.password_hash is not None) and check_password_hash(
-                user.password_hash, password
-            ):
+            password_hash = user.password_hash
+            if (password_hash is not None) and password_hash.startswith('pbkdf2') and check_password_hash(password_hash, password):
                 login_user(user, remember=True)
                 return redirect_next_url(fallback=url_for("user_profile"))
+            elif (password_hash is not None):
+                hs = password_hash.split('$')
+                if len(hs) == 3 and hmac.HMAC(hs[1].encode('utf-8'), password.encode('utf-8'), hs[0]).hexdigest() == hs[2]:
+                    login_user(user, remember=True)
+                    return redirect_next_url(fallback=url_for("user_profile"))
+                else:
+                    flash("Пара логин и пароль указаны неверно", category="error")
+                    return render_template("auth/login.html", user=current_user)
             else:
                 flash("Пара логин и пароль указаны неверно", category="error")
                 return render_template("auth/login.html", user=current_user)
@@ -195,7 +203,7 @@ def register_basic():
             new_user = Users(
                 email=email,
                 first_name=first_name,
-                password_hash=generate_password_hash(password, method="sha256"),
+                password_hash=generate_password_hash(password, method="pbkdf2:ha256"),
             )
             db.session.add(new_user)
             db.session.commit()
