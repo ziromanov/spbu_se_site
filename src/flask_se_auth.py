@@ -213,7 +213,7 @@ def register_basic():
             new_user = Users(
                 email=email,
                 first_name=first_name,
-                password_hash=generate_password_hash(password, method="pbkdf2:ha256"),
+                password_hash=generate_password_hash(password, method="pbkdf2:sha256"),
             )
             db.session.add(new_user)
             db.session.commit()
